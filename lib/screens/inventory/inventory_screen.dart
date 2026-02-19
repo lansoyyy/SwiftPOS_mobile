@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
-import '../../data/sample_data.dart';
 import '../../core/constants/app_colors.dart';
 import '../main_shell.dart';
 
@@ -16,6 +15,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String _search = '';
   String _filter = 'All';
   final _searchCtrl = TextEditingController();
+  List<String> _categories = ['All'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final categories = await widget.shell.getCategories();
+    if (mounted) {
+      setState(() {
+        _categories = ['All', ...categories];
+      });
+    }
+  }
 
   List<Product> get _filtered {
     return widget.shell.products.where((p) {
@@ -210,7 +225,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final filters = [
       'All',
       'Low Stock',
-      ...productCategories.where((c) => c != 'All'),
+      ..._categories.where((c) => c != 'All'),
     ];
     return SizedBox(
       height: 40,
@@ -356,11 +371,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   final v = int.tryParse(ctrl.text);
                   if (v != null && v >= 0) {
-                    widget.shell.updateStock(product.id, v);
-                    Navigator.pop(context);
+                    await widget.shell.updateStock(product.id, v);
+                    if (mounted) Navigator.pop(context);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -506,7 +521,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                   ),
                 ),
-                items: productCategories
+                items: _categories
                     .where((c) => c != 'All')
                     .map(
                       (c) => DropdownMenuItem(
@@ -524,12 +539,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     final name = nameCtrl.text.trim();
                     final price = double.tryParse(priceCtrl.text);
                     final stock = int.tryParse(stockCtrl.text);
                     if (name.isEmpty || price == null || stock == null) return;
-                    widget.shell.addProduct(
+                    await widget.shell.addProduct(
                       Product(
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
                         name: name,
@@ -540,7 +555,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         color: const Color(0xFF6366F1),
                       ),
                     );
-                    Navigator.pop(context);
+                    // Reload categories in case new category was added
+                    await _loadCategories();
+                    if (mounted) Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6366F1),
@@ -590,9 +607,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              widget.shell.deleteProduct(product.id);
-              Navigator.pop(context);
+            onPressed: () async {
+              await widget.shell.deleteProduct(product.id);
+              if (mounted) Navigator.pop(context);
             },
             child: const Text(
               'Delete',

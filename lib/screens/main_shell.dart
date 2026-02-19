@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/sale_record.dart';
-import '../data/sample_data.dart';
+import '../models/printer_settings.dart';
 import '../core/constants/app_colors.dart';
+import '../data/repositories/product_repository.dart';
+import '../data/repositories/sale_record_repository.dart';
+import '../data/repositories/printer_settings_repository.dart';
 import 'catalog/catalog_screen.dart';
 import 'inventory/inventory_screen.dart';
 import 'sales/sales_history_screen.dart';
@@ -18,11 +21,44 @@ class MainShell extends StatefulWidget {
 
 class MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
-  List<Product> products = List.from(sampleProducts);
+
+  // Repositories
+  final ProductRepository _productRepo = ProductRepository();
+  final SaleRecordRepository _saleRepo = SaleRecordRepository();
+  final PrinterSettingsRepository _printerRepo = PrinterSettingsRepository();
+
+  // State
+  List<Product> _products = [];
   final List<CartItem> cart = [];
-  final List<SaleRecord> salesHistory = [];
+  List<SaleRecord> _salesHistory = [];
   String? connectedPrinter;
   bool isPrinterConnected = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+
+    // Load products from database
+    _products = await _productRepo.getAllProducts();
+
+    // Load sales history from database
+    _salesHistory = await _saleRepo.getAllSales();
+
+    // Load printer settings from database
+    final printerSettings = await _printerRepo.getPrinterSettings();
+    if (printerSettings != null) {
+      connectedPrinter = printerSettings.printerName;
+      isPrinterConnected = printerSettings.isConnected;
+    }
+
+    setState(() => _isLoading = false);
+  }
 
   // Cart
   void addToCart(Product product) {
@@ -56,7 +92,11 @@ class MainShellState extends State<MainShell> {
   double get cartTotal => cart.fold(0.0, (s, i) => s + i.subtotal);
   int get cartCount => cart.fold(0, (s, i) => s + i.quantity);
 
-  SaleRecord completeSale(String paymentMethod, {double? amountPaid}) {
+  // Sales
+  Future<SaleRecord> completeSale(
+    String paymentMethod, {
+    double? amountPaid,
+  }) async {
     final total = cartTotal;
     final items = cart
         .map((i) => CartItem(product: i.product, quantity: i.quantity))
@@ -70,49 +110,81 @@ class MainShellState extends State<MainShell> {
       amountPaid: amountPaid,
       change: amountPaid != null ? amountPaid - total : null,
     );
-    setState(() {
-      for (final item in cart) {
-        final pi = products.indexWhere((p) => p.id == item.product.id);
-        if (pi >= 0) products[pi].stock -= item.quantity;
-      }
-      salesHistory.insert(0, record);
-      cart.clear();
-    });
+
+    // Save sale to database
+    await _saleRepo.insertSale(record);
+
+    // Update product stocks
+    for (final item in cart) {
+      await _productRepo.decrementProductStock(item.product.id, item.quantity);
+    }
+
+    // Reload products and sales
+    await _reloadProducts();
+    await _reloadSales();
+
+    // Clear cart
+    setState(() => cart.clear());
+
     return record;
   }
 
   // Inventory
-  void updateStock(String productId, int newStock) {
-    setState(() {
-      final idx = products.indexWhere((p) => p.id == productId);
-      if (idx >= 0) products[idx].stock = newStock;
-    });
+  Future<void> updateStock(String productId, int newStock) async {
+    await _productRepo.updateProductStock(productId, newStock);
+    await _reloadProducts();
   }
 
-  void addProduct(Product product) => setState(() => products.add(product));
+  Future<void> addProduct(Product product) async {
+    await _productRepo.insertProduct(product);
+    await _reloadProducts();
+  }
 
-  void deleteProduct(String productId) {
-    setState(() => products.removeWhere((p) => p.id == productId));
+  Future<void> deleteProduct(String productId) async {
+    await _productRepo.deleteProduct(productId);
+    await _reloadProducts();
+  }
+
+  Future<void> updateProduct(Product product) async {
+    await _productRepo.updateProduct(product);
+    await _reloadProducts();
   }
 
   // Printer
-  void connectPrinter(String name) {
+  Future<void> connectPrinter(String name, String address) async {
+    final settings = PrinterSettings(
+      printerName: name,
+      printerAddress: address,
+      isConnected: true,
+      lastConnected: DateTime.now(),
+    );
+    await _printerRepo.savePrinterSettings(settings);
     setState(() {
       connectedPrinter = name;
       isPrinterConnected = true;
     });
   }
 
-  void disconnectPrinter() {
+  Future<void> disconnectPrinter() async {
+    await _printerRepo.disconnectPrinter();
     setState(() {
       connectedPrinter = null;
       isPrinterConnected = false;
     });
   }
 
+  // Getters for screens
+  List<Product> get products => _products;
+  List<SaleRecord> get salesHistory => _salesHistory;
+
+  // Get categories from database
+  Future<List<String>> getCategories() async {
+    return await _productRepo.getCategories();
+  }
+
   double get todayTotal {
     final today = DateTime.now();
-    return salesHistory
+    return _salesHistory
         .where(
           (s) =>
               s.timestamp.year == today.year &&
@@ -124,7 +196,7 @@ class MainShellState extends State<MainShell> {
 
   List<SaleRecord> get todaySales {
     final today = DateTime.now();
-    return salesHistory
+    return _salesHistory
         .where(
           (s) =>
               s.timestamp.year == today.year &&
@@ -134,8 +206,26 @@ class MainShellState extends State<MainShell> {
         .toList();
   }
 
+  // Private helpers
+  Future<void> _reloadProducts() async {
+    _products = await _productRepo.getAllProducts();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _reloadSales() async {
+    _salesHistory = await _saleRepo.getAllSales();
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final screens = [
       CatalogScreen(shell: this),
       InventoryScreen(shell: this),

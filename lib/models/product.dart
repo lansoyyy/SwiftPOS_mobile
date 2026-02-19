@@ -42,4 +42,33 @@ class Product {
       color: color ?? this.color,
     );
   }
+
+  // Database serialization
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'category': category,
+      'price': price,
+      'stock': stock,
+      'barcode': barcode,
+      'icon_code': icon.codePoint,
+      'color_value': color.value,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+      'updated_at': DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
+  factory Product.fromMap(Map<String, dynamic> map) {
+    return Product(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      category: map['category'] as String,
+      price: map['price'] as double,
+      stock: map['stock'] as int,
+      barcode: map['barcode'] as String?,
+      icon: IconData(map['icon_code'] as int, fontFamily: 'MaterialIcons'),
+      color: Color(map['color_value'] as int),
+    );
+  }
 }

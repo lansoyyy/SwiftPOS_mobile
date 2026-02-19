@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
-import '../../data/sample_data.dart';
 import '../../core/constants/app_colors.dart';
 import '../main_shell.dart';
 import '../checkout/checkout_screen.dart';
@@ -17,6 +16,22 @@ class _CatalogScreenState extends State<CatalogScreen> {
   String _search = '';
   String _category = 'All';
   final _searchCtrl = TextEditingController();
+  List<String> _categories = ['All'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final categories = await widget.shell.getCategories();
+    if (mounted) {
+      setState(() {
+        _categories = ['All', ...categories];
+      });
+    }
+  }
 
   List<Product> get _filtered {
     return widget.shell.products.where((p) {
@@ -171,10 +186,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: productCategories.length,
+        itemCount: _categories.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
-          final cat = productCategories[i];
+          final cat = _categories[i];
           final selected = _category == cat;
           return GestureDetector(
             onTap: () => setState(() => _category = cat),

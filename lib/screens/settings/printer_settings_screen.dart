@@ -316,7 +316,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                         )
                       else
                         GestureDetector(
-                          onTap: () => widget.shell.connectPrinter(d.name),
+                          onTap: () =>
+                              widget.shell.connectPrinter(d.name, d.mac),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,

@@ -118,7 +118,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _processPayment(String method, double? amountPaid) async {
     setState(() => _processing = true);
     await Future.delayed(const Duration(milliseconds: 800));
-    final record = widget.shell.completeSale(method, amountPaid: amountPaid);
+    final record = await widget.shell.completeSale(
+      method,
+      amountPaid: amountPaid,
+    );
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
