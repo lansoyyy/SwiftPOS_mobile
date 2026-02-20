@@ -514,16 +514,17 @@ class _ShareOption extends StatelessWidget {
 }
 
 class _ReceiptLabel extends StatelessWidget {
-  final String key2;
+  final String label;
   final String value;
-  const _ReceiptLabel(this.key2, this.value);
+
+  const _ReceiptLabel(this.label, this.value);
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Text(
-          '$key2: ',
+          '$label: ',
           style: TextStyle(
             fontFamily: 'Urbanist',
             fontSize: 11,

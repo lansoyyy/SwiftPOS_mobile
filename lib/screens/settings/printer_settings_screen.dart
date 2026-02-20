@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../data/bluetooth/bluetooth_service.dart';
 import '../main_shell.dart';
 
 class PrinterSettingsScreen extends StatefulWidget {
@@ -11,46 +13,94 @@ class PrinterSettingsScreen extends StatefulWidget {
 }
 
 class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
-  bool _scanning = false;
   bool _testPrinting = false;
-  List<_BtDevice> _devices = [];
+  List<BluetoothDeviceModel> _devices = [];
+  StreamSubscription? _devicesSubscription;
+  StreamSubscription? _scanningSubscription;
 
-  static const _mockDevices = [
-    _BtDevice('EPSON TM-T82', 'Thermal Printer', '3C:A8:2A:12:BC:F1'),
-    _BtDevice('Xprinter XP-58', 'Thermal Printer', 'A4:C3:F0:85:AC:22'),
-    _BtDevice('BlueTooth Speaker', 'Audio Device', '1A:2B:3C:4D:5E:6F'),
-    _BtDevice('Galaxy S24', 'Phone', 'FA:12:34:56:78:90'),
-  ];
-
-  Future<void> _startScan() async {
-    setState(() {
-      _scanning = true;
-      _devices = [];
-    });
-    for (int i = 0; i < _mockDevices.length; i++) {
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (!mounted) return;
-      setState(() => _devices.add(_mockDevices[i]));
-    }
-    setState(() => _scanning = false);
+  @override
+  void initState() {
+    super.initState();
+    _listenToBluetoothStreams();
   }
 
+  void _listenToBluetoothStreams() {
+    _devicesSubscription = widget.shell.onBluetoothDevicesChanged.listen((
+      devices,
+    ) {
+      if (mounted) {
+        setState(() => _devices = devices);
+      }
+    });
+
+    _scanningSubscription = widget.shell.onBluetoothScanningChanged.listen((
+      scanning,
+    ) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _devicesSubscription?.cancel();
+    _scanningSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _startScan() async {
+    await widget.shell.startBluetoothScan();
+  }
+
+  Future<void> _stopScan() async {
+    await widget.shell.stopBluetoothScan();
+  }
+
+  bool get _isScanning => widget.shell.isBluetoothScanning;
+
   Future<void> _testPrint() async {
+    if (!widget.shell.isPrinterConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'No printer connected. Please connect a printer first.',
+            style: TextStyle(
+              fontFamily: 'Urbanist',
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _testPrinting = true);
-    await Future.delayed(const Duration(seconds: 2));
+
+    final success = await widget.shell.printTestReceipt();
+
     if (!mounted) return;
     setState(() => _testPrinting = false);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text(
-          'Test print sent successfully!',
+        content: Text(
+          success
+              ? 'Test print sent successfully!'
+              : 'Failed to send test print',
           style: TextStyle(
             fontFamily: 'Urbanist',
             fontSize: 13,
             color: AppColors.textSecondary,
           ),
         ),
-        backgroundColor: AppColors.success,
+        backgroundColor: success ? AppColors.success : Colors.red,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -186,8 +236,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _scanning ? null : _startScan,
-                icon: _scanning
+                icon: _isScanning
                     ? const SizedBox(
                         width: 18,
                         height: 18,
@@ -198,7 +247,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       )
                     : const Icon(Icons.bluetooth_searching, size: 20),
                 label: Text(
-                  _scanning ? 'Scanning...' : 'Search for Printer',
+                  _isScanning ? 'Scanning...' : 'Search for Printer',
                   style: const TextStyle(
                     fontFamily: 'Urbanist',
                     fontWeight: FontWeight.w700,
@@ -216,6 +265,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   ),
                   elevation: 0,
                 ),
+                onPressed: _isScanning ? _stopScan : _startScan,
               ),
             ),
 
@@ -232,7 +282,6 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               ),
               const SizedBox(height: 10),
               ...(_devices.map((d) {
-                final isThermal = d.type == 'Thermal Printer';
                 final isCurrentlyConnected =
                     widget.shell.connectedPrinter == d.name;
                 return Container(
@@ -257,15 +306,15 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: isThermal
+                          color: d.isBonded
                               ? AppColors.primaryBg
                               : AppColors.gray100,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
-                          isThermal ? Icons.print : Icons.bluetooth,
+                          d.isBonded ? Icons.print : Icons.bluetooth,
                           size: 20,
-                          color: isThermal
+                          color: d.isBonded
                               ? AppColors.primary
                               : AppColors.textSecondary,
                         ),
@@ -284,7 +333,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                               ),
                             ),
                             Text(
-                              '${d.type} · ${d.mac}',
+                              '${d.address}',
                               style: TextStyle(
                                 fontFamily: 'Urbanist',
                                 fontSize: 11,
@@ -317,14 +366,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       else
                         GestureDetector(
                           onTap: () =>
-                              widget.shell.connectPrinter(d.name, d.mac),
+                              widget.shell.connectPrinter(d.name, d.address),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: isThermal
+                              color: d.isBonded
                                   ? AppColors.primary
                                   : AppColors.gray200,
                               borderRadius: BorderRadius.circular(8),
@@ -335,7 +384,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                                 fontFamily: 'Urbanist',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: isThermal
+                                color: d.isBonded
                                     ? AppColors.textOnPrimary
                                     : AppColors.textSecondary,
                               ),
@@ -502,11 +551,4 @@ class _InfoRow extends StatelessWidget {
       ],
     );
   }
-}
-
-class _BtDevice {
-  final String name;
-  final String type;
-  final String mac;
-  const _BtDevice(this.name, this.type, this.mac);
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/sale_record.dart';
@@ -7,6 +8,8 @@ import '../core/constants/app_colors.dart';
 import '../data/repositories/product_repository.dart';
 import '../data/repositories/sale_record_repository.dart';
 import '../data/repositories/printer_settings_repository.dart';
+import '../data/bluetooth/bluetooth_service.dart';
+import '../data/bluetooth/esc_pos_service.dart';
 import 'catalog/catalog_screen.dart';
 import 'inventory/inventory_screen.dart';
 import 'sales/sales_history_screen.dart';
@@ -27,6 +30,10 @@ class MainShellState extends State<MainShell> {
   final SaleRecordRepository _saleRepo = SaleRecordRepository();
   final PrinterSettingsRepository _printerRepo = PrinterSettingsRepository();
 
+  // Bluetooth Service
+  final BluetoothService _bluetoothService = BluetoothService();
+  late final EscPosService _escPosService;
+
   // State
   List<Product> _products = [];
   final List<CartItem> cart = [];
@@ -38,6 +45,7 @@ class MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    _escPosService = EscPosService(_bluetoothService);
     _loadData();
   }
 
@@ -152,25 +160,77 @@ class MainShellState extends State<MainShell> {
 
   // Printer
   Future<void> connectPrinter(String name, String address) async {
-    final settings = PrinterSettings(
-      printerName: name,
-      printerAddress: address,
-      isConnected: true,
-      lastConnected: DateTime.now(),
-    );
-    await _printerRepo.savePrinterSettings(settings);
-    setState(() {
-      connectedPrinter = name;
-      isPrinterConnected = true;
-    });
+    final connected = await _bluetoothService.connect(address);
+    if (connected) {
+      final settings = PrinterSettings(
+        printerName: name,
+        printerAddress: address,
+        isConnected: true,
+        lastConnected: DateTime.now(),
+      );
+      await _printerRepo.savePrinterSettings(settings);
+      setState(() {
+        connectedPrinter = name;
+        isPrinterConnected = true;
+      });
+    }
   }
 
   Future<void> disconnectPrinter() async {
+    await _bluetoothService.disconnect();
     await _printerRepo.disconnectPrinter();
     setState(() {
       connectedPrinter = null;
       isPrinterConnected = false;
     });
+  }
+
+  // Bluetooth Methods
+  Future<bool> initializeBluetooth() async {
+    return await _bluetoothService.initialize();
+  }
+
+  Future<bool> enableBluetooth() async {
+    return await _bluetoothService.enableBluetooth();
+  }
+
+  Future<void> startBluetoothScan() async {
+    await _bluetoothService.startScan();
+  }
+
+  Future<void> stopBluetoothScan() async {
+    await _bluetoothService.stopScan();
+  }
+
+  bool get isBluetoothEnabled => _bluetoothService.isEnabled;
+  bool get isBluetoothScanning => _bluetoothService.isScanning;
+  List<BluetoothDeviceModel> get bluetoothDevices =>
+      _bluetoothService.discoveredDevices;
+  Stream<BluetoothState> get onBluetoothStateChanged =>
+      _bluetoothService.onStateChanged;
+  Stream<List<BluetoothDeviceModel>> get onBluetoothDevicesChanged =>
+      _bluetoothService.onDevicesChanged;
+  Stream<bool> get onBluetoothScanningChanged =>
+      _bluetoothService.onScanningChanged;
+
+  // Print Methods
+  Future<bool> printReceipt(
+    SaleRecord sale, {
+    String storeName = 'SwiftPOS',
+  }) async {
+    return await _escPosService.printReceipt(sale, storeName: storeName);
+  }
+
+  Future<bool> printTestReceipt({String storeName = 'SwiftPOS'}) async {
+    return await _escPosService.printTestReceipt(storeName: storeName);
+  }
+
+  Future<bool> printText(
+    String text, {
+    bool bold = false,
+    bool center = false,
+  }) async {
+    return await _escPosService.printText(text, bold: bold, center: center);
   }
 
   // Getters for screens
