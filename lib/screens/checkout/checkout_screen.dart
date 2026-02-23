@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../models/discount.dart';
+import '../../models/tax_settings.dart';
+import '../../models/cart_item.dart';
 import '../main_shell.dart';
 import '../receipt/receipt_screen.dart';
+import '../receipt/receipt_preview_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final MainShellState shell;
@@ -19,6 +23,61 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void dispose() {
     _cashController.dispose();
     super.dispose();
+  }
+
+  void _showItemDiscountDialog(CartItem item) {
+    showDialog(
+      context: context,
+      builder: (_) => _ItemDiscountDialog(
+        item: item,
+        onApply: (discount) {
+          widget.shell.setItemDiscount(item.product.id, discount);
+        },
+      ),
+    );
+  }
+
+  void _showOrderDiscountDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => _OrderDiscountDialog(
+        currentDiscount: widget.shell.orderDiscount,
+        onApply: (discount) {
+          widget.shell.setOrderDiscount(discount);
+        },
+      ),
+    );
+  }
+
+  void _showTaxSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => _TaxSettingsDialog(
+        currentSettings: widget.shell.taxSettings,
+        onApply: (settings) {
+          widget.shell.setTaxSettings(settings);
+        },
+      ),
+    );
+  }
+
+  void _showReceiptPreview() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReceiptPreviewScreen(
+          shell: widget.shell,
+          items: widget.shell.cart,
+          taxSettings: widget.shell.taxSettings,
+          orderDiscount: widget.shell.orderDiscount,
+          subtotal: widget.shell.cartSubtotal,
+          itemDiscounts: widget.shell.cartItemDiscounts,
+          orderDiscountAmount: widget.shell.cartOrderDiscount,
+          taxAmount: widget.shell.cartTaxAmount,
+          total: widget.shell.cartTotal,
+        ),
+      ),
+    );
   }
 
   void _handlePayment(String method) async {
@@ -134,7 +193,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = widget.shell.cart;
-    final total = widget.shell.cartTotal;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -315,14 +373,48 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                                   fontSize: 14,
                                                 ),
                                               ),
-                                              Text(
-                                                'P${item.product.price.toStringAsFixed(2)} each',
-                                                style: TextStyle(
-                                                  fontFamily: 'Urbanist',
-                                                  fontSize: 12,
-                                                  color:
-                                                      AppColors.textSecondary,
-                                                ),
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    'P${item.product.price.toStringAsFixed(2)} each',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Urbanist',
+                                                      fontSize: 12,
+                                                      color: AppColors
+                                                          .textSecondary,
+                                                    ),
+                                                  ),
+                                                  if (item.discount !=
+                                                      null) ...[
+                                                    const SizedBox(width: 4),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 6,
+                                                            vertical: 2,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            AppColors.warning,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              4,
+                                                            ),
+                                                      ),
+                                                      child: Text(
+                                                        item.discount!.name,
+                                                        style: const TextStyle(
+                                                          fontFamily:
+                                                              'Urbanist',
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
                                               ),
                                             ],
                                           ),
@@ -358,6 +450,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                                     item.quantity + 1,
                                                   ),
                                               primary: true,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            GestureDetector(
+                                              onTap: () =>
+                                                  _showItemDiscountDialog(item),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: item.discount != null
+                                                      ? AppColors.warning
+                                                      : AppColors.gray100,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: Icon(
+                                                  Icons.local_offer,
+                                                  size: 16,
+                                                  color: item.discount != null
+                                                      ? Colors.white
+                                                      : AppColors.textSecondary,
+                                                ),
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -404,9 +520,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           children: [
                             _TotalRow(
                               label: 'Subtotal',
-                              value: 'P${total.toStringAsFixed(2)}',
+                              value:
+                                  'P${widget.shell.cartSubtotal.toStringAsFixed(2)}',
                             ),
+                            if (widget.shell.cartItemDiscounts > 0) ...[
+                              const SizedBox(height: 4),
+                              _TotalRow(
+                                label: 'Item Discounts',
+                                value:
+                                    '-P${widget.shell.cartItemDiscounts.toStringAsFixed(2)}',
+                                valueColor: AppColors.warning,
+                              ),
+                            ],
+                            if (widget.shell.cartOrderDiscount > 0) ...[
+                              const SizedBox(height: 4),
+                              _TotalRow(
+                                label: 'Order Discount',
+                                value:
+                                    '-P${widget.shell.cartOrderDiscount.toStringAsFixed(2)}',
+                                valueColor: AppColors.warning,
+                              ),
+                            ],
                             const SizedBox(height: 8),
+                            if (widget.shell.taxSettings.enabled) ...[
+                              _TotalRow(
+                                label: widget.shell.taxSettings.name,
+                                value:
+                                    'P${widget.shell.cartTaxAmount.toStringAsFixed(2)}',
+                              ),
+                              const SizedBox(height: 4),
+                            ],
                             Divider(color: Colors.grey[100]),
                             const SizedBox(height: 8),
                             Row(
@@ -421,12 +564,59 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   ),
                                 ),
                                 Text(
-                                  'P${total.toStringAsFixed(2)}',
+                                  'P${widget.shell.cartTotal.toStringAsFixed(2)}',
                                   style: const TextStyle(
                                     fontFamily: 'Urbanist',
                                     fontWeight: FontWeight.w800,
                                     fontSize: 20,
                                     color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // Order discount button
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _showOrderDiscountDialog,
+                                    icon: const Icon(
+                                      Icons.local_offer,
+                                      size: 18,
+                                    ),
+                                    label: const Text(
+                                      'Add Order Discount',
+                                      style: TextStyle(fontFamily: 'Urbanist'),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.textSecondary,
+                                      side: BorderSide(color: AppColors.border),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _showTaxSettingsDialog,
+                                    icon: const Icon(
+                                      Icons.receipt_long,
+                                      size: 18,
+                                    ),
+                                    label: const Text(
+                                      'Tax Settings',
+                                      style: TextStyle(fontFamily: 'Urbanist'),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.textSecondary,
+                                      side: BorderSide(color: AppColors.border),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -445,6 +635,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                       const SizedBox(height: 12),
                     ],
+                  ),
+                ),
+                // Preview receipt button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: OutlinedButton.icon(
+                    onPressed: _showReceiptPreview,
+                    icon: const Icon(Icons.receipt_long, size: 20),
+                    label: const Text(
+                      'Preview Receipt',
+                      style: TextStyle(fontFamily: 'Urbanist'),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      minimumSize: const Size(double.infinity, 50),
+                      side: BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
                 // Payment buttons
@@ -518,7 +728,8 @@ class _QtyBtn extends StatelessWidget {
 class _TotalRow extends StatelessWidget {
   final String label;
   final String value;
-  const _TotalRow({required this.label, required this.value});
+  final Color? valueColor;
+  const _TotalRow({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
@@ -535,10 +746,11 @@ class _TotalRow extends StatelessWidget {
         ),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Urbanist',
             fontWeight: FontWeight.w600,
             fontSize: 14,
+            color: valueColor,
           ),
         ),
       ],
@@ -613,6 +825,431 @@ class _PaymentButton extends StatelessWidget {
               ),
               Icon(Icons.arrow_forward_ios, size: 14, color: color),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Dialogs for tax, discount, and payment
+class _ItemDiscountDialog extends StatefulWidget {
+  final CartItem item;
+  final Function(Discount?) onApply;
+
+  const _ItemDiscountDialog({required this.item, required this.onApply});
+
+  @override
+  State<_ItemDiscountDialog> createState() => _ItemDiscountDialogState();
+}
+
+class _ItemDiscountDialogState extends State<_ItemDiscountDialog> {
+  Discount? _selectedDiscount;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDiscount = widget.item.discount;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: widget.item.product.color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              widget.item.product.icon,
+              size: 20,
+              color: widget.item.product.color,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.item.product.name,
+                  style: const TextStyle(
+                    fontFamily: 'Urbanist',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  'P${widget.item.basePrice.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontFamily: 'Urbanist',
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Select Discount',
+            style: TextStyle(
+              fontFamily: 'Urbanist',
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _DiscountChip(
+                label: 'No Discount',
+                isSelected: _selectedDiscount == null,
+                onTap: () => setState(() => _selectedDiscount = null),
+              ),
+              ...Discount.predefinedItemDiscounts.map((discount) {
+                final isSelected = _selectedDiscount?.name == discount.name;
+                return _DiscountChip(
+                  label: discount.name,
+                  isSelected: isSelected,
+                  onTap: () => setState(() => _selectedDiscount = discount),
+                );
+              }),
+            ],
+          ),
+          if (_selectedDiscount != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.successLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Discounted Price',
+                    style: TextStyle(fontFamily: 'Urbanist', fontSize: 13),
+                  ),
+                  Text(
+                    'P${(widget.item.basePrice - _selectedDiscount!.applyTo(widget.item.basePrice)).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontFamily: 'Urbanist',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.success,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel', style: TextStyle(fontFamily: 'Urbanist')),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: () {
+            widget.onApply(_selectedDiscount);
+            Navigator.pop(context);
+          },
+          child: const Text(
+            'Apply',
+            style: TextStyle(fontFamily: 'Urbanist', color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OrderDiscountDialog extends StatefulWidget {
+  final Discount? currentDiscount;
+  final Function(Discount?) onApply;
+
+  const _OrderDiscountDialog({
+    required this.currentDiscount,
+    required this.onApply,
+  });
+
+  @override
+  State<_OrderDiscountDialog> createState() => _OrderDiscountDialogState();
+}
+
+class _OrderDiscountDialogState extends State<_OrderDiscountDialog> {
+  Discount? _selectedDiscount;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDiscount = widget.currentDiscount;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text(
+        'Order Discount',
+        style: TextStyle(fontFamily: 'Urbanist', fontWeight: FontWeight.w700),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Select Discount',
+            style: TextStyle(
+              fontFamily: 'Urbanist',
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _DiscountChip(
+                label: 'No Discount',
+                isSelected: _selectedDiscount == null,
+                onTap: () => setState(() => _selectedDiscount = null),
+              ),
+              ...Discount.predefinedOrderDiscounts.map((discount) {
+                final isSelected = _selectedDiscount?.name == discount.name;
+                return _DiscountChip(
+                  label: discount.name,
+                  isSelected: isSelected,
+                  onTap: () => setState(() => _selectedDiscount = discount),
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel', style: TextStyle(fontFamily: 'Urbanist')),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: () {
+            widget.onApply(_selectedDiscount);
+            Navigator.pop(context);
+          },
+          child: const Text(
+            'Apply',
+            style: TextStyle(fontFamily: 'Urbanist', color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TaxSettingsDialog extends StatefulWidget {
+  final TaxSettings currentSettings;
+  final Function(TaxSettings) onApply;
+
+  const _TaxSettingsDialog({
+    required this.currentSettings,
+    required this.onApply,
+  });
+
+  @override
+  State<_TaxSettingsDialog> createState() => _TaxSettingsDialogState();
+}
+
+class _TaxSettingsDialogState extends State<_TaxSettingsDialog> {
+  late bool _enabled;
+  late double _rate;
+  late String _name;
+  final _rateController = TextEditingController();
+  final _nameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _enabled = widget.currentSettings.enabled;
+    _rate = widget.currentSettings.rate;
+    _name = widget.currentSettings.name;
+    _rateController.text = _rate.toStringAsFixed(2);
+    _nameController.text = _name;
+  }
+
+  @override
+  void dispose() {
+    _rateController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text(
+        'Tax Settings',
+        style: TextStyle(fontFamily: 'Urbanist', fontWeight: FontWeight.w700),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            title: const Text(
+              'Enable Tax',
+              style: TextStyle(
+                fontFamily: 'Urbanist',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              _enabled ? 'Tax will be applied to orders' : 'Tax is disabled',
+              style: const TextStyle(fontFamily: 'Urbanist', fontSize: 12),
+            ),
+            value: _enabled,
+            onChanged: (value) => setState(() => _enabled = value),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _rateController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            enabled: _enabled,
+            decoration: InputDecoration(
+              labelText: 'Tax Rate (%)',
+              suffixText: '%',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.primary, width: 2),
+              ),
+            ),
+            onChanged: (value) {
+              final parsed = double.tryParse(value);
+              if (parsed != null) {
+                setState(() => _rate = parsed);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _nameController,
+            enabled: _enabled,
+            decoration: InputDecoration(
+              labelText: 'Tax Name',
+              hintText: 'e.g., VAT, GST, Sales Tax',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.primary, width: 2),
+              ),
+            ),
+            onChanged: (value) => setState(() => _name = value),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel', style: TextStyle(fontFamily: 'Urbanist')),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: () {
+            widget.onApply(
+              TaxSettings(enabled: _enabled, rate: _rate, name: _name),
+            );
+            Navigator.pop(context);
+          },
+          child: const Text(
+            'Apply',
+            style: TextStyle(fontFamily: 'Urbanist', color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DiscountChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _DiscountChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Urbanist',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
           ),
         ),
       ),

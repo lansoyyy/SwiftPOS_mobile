@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../models/sale_record.dart';
 import '../../core/constants/app_colors.dart';
 import '../main_shell.dart';
@@ -60,6 +61,11 @@ class ReceiptScreen extends StatelessWidget {
           ),
         ),
         actions: [
+          IconButton(
+            onPressed: () => _showPrintDialog(context),
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Print Receipt',
+          ),
           IconButton(
             onPressed: () => _showShareSheet(context),
             icon: const Icon(Icons.share_outlined),
@@ -205,6 +211,17 @@ class ReceiptScreen extends StatelessWidget {
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
+                                        if (item.discount != null) ...[
+                                          Text(
+                                            item.discount!.name,
+                                            style: const TextStyle(
+                                              fontFamily: 'Urbanist',
+                                              fontSize: 10,
+                                              color: AppColors.warning,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
                                         Text(
                                           '${item.quantity} x P${item.product.price.toStringAsFixed(2)}',
                                           style: TextStyle(
@@ -229,6 +246,30 @@ class ReceiptScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 6),
+                          _DashedDivider(),
+                          const SizedBox(height: 10),
+                          // Totals
+                          _ReceiptTotalRow(
+                            label: 'Subtotal',
+                            value: 'P${record.subtotal.toStringAsFixed(2)}',
+                          ),
+                          if (record.totalDiscount > 0) ...[
+                            const SizedBox(height: 4),
+                            _ReceiptTotalRow(
+                              label: 'Discounts',
+                              value:
+                                  '-P${record.totalDiscount.toStringAsFixed(2)}',
+                              valueColor: AppColors.warning,
+                            ),
+                          ],
+                          if (record.taxAmount > 0) ...[
+                            const SizedBox(height: 4),
+                            _ReceiptTotalRow(
+                              label: 'Tax',
+                              value: 'P${record.taxAmount.toStringAsFixed(2)}',
+                            ),
+                          ],
+                          const SizedBox(height: 8),
                           _DashedDivider(),
                           const SizedBox(height: 10),
                           // Total
@@ -396,21 +437,60 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
-  void _showPrintDialog(BuildContext context) {
+  Future<void> _showPrintDialog(BuildContext context) async {
     final isPrinterConnected = shell.isPrinterConnected;
+
+    if (!isPrinterConnected) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.print, color: Colors.grey),
+              SizedBox(width: 8),
+              Text(
+                'No Printer Connected',
+                style: TextStyle(
+                  fontFamily: 'Urbanist',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Go to Settings to connect a thermal printer.',
+            style: TextStyle(fontFamily: 'Urbanist'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontFamily: 'Urbanist')),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Show loading dialog
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
+        title: const Row(
           children: [
-            Icon(
-              Icons.print,
-              color: isPrinterConnected ? const Color(0xFF6366F1) : Colors.grey,
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            const SizedBox(width: 8),
-            const Text(
-              'Print Receipt',
+            SizedBox(width: 12),
+            Text(
+              'Printing...',
               style: TextStyle(
                 fontFamily: 'Urbanist',
                 fontWeight: FontWeight.w700,
@@ -419,19 +499,59 @@ class ReceiptScreen extends StatelessWidget {
           ],
         ),
         content: Text(
-          isPrinterConnected
-              ? 'Sending receipt to ${shell.connectedPrinter}...'
-              : 'No printer connected. Go to Settings to connect a thermal printer.',
+          'Sending receipt to ${shell.connectedPrinter}...',
           style: const TextStyle(fontFamily: 'Urbanist'),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(fontFamily: 'Urbanist')),
-          ),
-        ],
       ),
     );
+
+    // Print the receipt
+    final success = await shell.printReceipt(record);
+
+    // Close loading dialog
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
+
+    // Show result
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                success ? Icons.check_circle : Icons.error,
+                color: success ? AppColors.success : Colors.red,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                success ? 'Print Successful' : 'Print Failed',
+                style: const TextStyle(
+                  fontFamily: 'Urbanist',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            success
+                ? 'Receipt has been sent to the printer.'
+                : 'Failed to send receipt to the printer. Please try again.',
+            style: const TextStyle(fontFamily: 'Urbanist'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontFamily: 'Urbanist')),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _showShareSheet(BuildContext context) {
@@ -537,6 +657,44 @@ class _ReceiptLabel extends StatelessWidget {
             fontFamily: 'Urbanist',
             fontSize: 11,
             fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReceiptTotalRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _ReceiptTotalRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Urbanist',
+            fontSize: 12,
+            color: Colors.grey,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'Urbanist',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: valueColor ?? Colors.black,
           ),
         ),
       ],

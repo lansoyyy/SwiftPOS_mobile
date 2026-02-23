@@ -4,6 +4,8 @@ import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/sale_record.dart';
 import '../models/printer_settings.dart';
+import '../models/tax_settings.dart';
+import '../models/discount.dart';
 import '../core/constants/app_colors.dart';
 import '../data/repositories/product_repository.dart';
 import '../data/repositories/sale_record_repository.dart';
@@ -13,6 +15,7 @@ import '../data/bluetooth/esc_pos_service.dart';
 import 'catalog/catalog_screen.dart';
 import 'inventory/inventory_screen.dart';
 import 'sales/sales_history_screen.dart';
+import 'analytics/analytics_screen.dart';
 import 'settings/printer_settings_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -41,6 +44,8 @@ class MainShellState extends State<MainShell> {
   String? connectedPrinter;
   bool isPrinterConnected = false;
   bool _isLoading = true;
+  TaxSettings taxSettings = const TaxSettings();
+  Discount? orderDiscount;
 
   @override
   void initState() {
@@ -95,28 +100,83 @@ class MainShellState extends State<MainShell> {
     });
   }
 
-  void clearCart() => setState(() => cart.clear());
+  void clearCart() => setState(() {
+    cart.clear();
+    orderDiscount = null;
+  });
 
-  double get cartTotal => cart.fold(0.0, (s, i) => s + i.subtotal);
+  double get cartSubtotal => cart.fold(0.0, (s, i) => s + i.basePrice);
+
+  double get cartItemDiscounts =>
+      cart.fold(0.0, (s, i) => s + i.discountAmount);
+
+  double get cartSubtotalAfterDiscounts => cartSubtotal - cartItemDiscounts;
+
+  double get cartOrderDiscount =>
+      orderDiscount?.applyTo(cartSubtotalAfterDiscounts) ?? 0.0;
+
+  double get cartTaxableAmount =>
+      cartSubtotalAfterDiscounts - cartOrderDiscount;
+
+  double get cartTaxAmount =>
+      taxSettings.enabled ? cartTaxableAmount * (taxSettings.rate / 100) : 0.0;
+
+  double get cartTotal => cartTaxableAmount + cartTaxAmount;
+
   int get cartCount => cart.fold(0, (s, i) => s + i.quantity);
+
+  // Tax & Discount
+  void setTaxSettings(TaxSettings settings) {
+    setState(() => taxSettings = settings);
+  }
+
+  void setOrderDiscount(Discount? discount) {
+    setState(() => orderDiscount = discount);
+  }
+
+  void setItemDiscount(String productId, Discount? discount) {
+    setState(() {
+      final idx = cart.indexWhere((i) => i.product.id == productId);
+      if (idx >= 0) {
+        cart[idx] = cart[idx].copyWith(discount: discount);
+      }
+    });
+  }
 
   // Sales
   Future<SaleRecord> completeSale(
     String paymentMethod, {
     double? amountPaid,
+    List<String>? paymentMethods,
   }) async {
+    final subtotal = cartSubtotal;
+    final totalDiscount = cartItemDiscounts + cartOrderDiscount;
+    final taxAmount = cartTaxAmount;
     final total = cartTotal;
+
     final items = cart
-        .map((i) => CartItem(product: i.product, quantity: i.quantity))
+        .map(
+          (i) => CartItem(
+            product: i.product,
+            quantity: i.quantity,
+            discount: i.discount,
+          ),
+        )
         .toList();
+
     final record = SaleRecord(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       items: items,
+      subtotal: subtotal,
+      totalDiscount: totalDiscount,
+      taxAmount: taxAmount,
       total: total,
       timestamp: DateTime.now(),
       paymentMethod: paymentMethod,
+      paymentMethods: paymentMethods ?? [paymentMethod],
       amountPaid: amountPaid,
       change: amountPaid != null ? amountPaid - total : null,
+      orderDiscount: orderDiscount,
     );
 
     // Save sale to database
@@ -290,6 +350,7 @@ class MainShellState extends State<MainShell> {
       CatalogScreen(shell: this),
       InventoryScreen(shell: this),
       SalesHistoryScreen(shell: this),
+      AnalyticsScreen(shell: this),
       PrinterSettingsScreen(shell: this),
     ];
 
@@ -326,6 +387,11 @@ class MainShellState extends State<MainShell> {
             icon: Icon(Icons.bar_chart_outlined),
             selectedIcon: Icon(Icons.bar_chart),
             label: 'Sales',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
+            label: 'Analytics',
           ),
           const NavigationDestination(
             icon: Icon(Icons.settings_outlined),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../models/sale_record.dart';
 import '../../core/constants/app_colors.dart';
 import '../main_shell.dart';
@@ -79,6 +80,85 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     return '${months[dt.month - 1]} ${dt.day}';
   }
 
+  Future<void> _reprintLastReceipt() async {
+    final sales = widget.shell.salesHistory;
+    if (sales.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No sales history available')),
+        );
+      }
+      return;
+    }
+
+    final lastSale = sales.last;
+
+    if (!widget.shell.isPrinterConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No printer connected. Go to Settings to connect a printer.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Printing...',
+              style: TextStyle(
+                fontFamily: 'Urbanist',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Reprinting receipt to ${widget.shell.connectedPrinter}...',
+          style: const TextStyle(fontFamily: 'Urbanist'),
+        ),
+      ),
+    );
+
+    // Print the receipt
+    final success = await widget.shell.printReceipt(lastSale);
+
+    // Close loading dialog
+    if (mounted) {
+      Navigator.pop(context);
+    }
+
+    // Show result
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Receipt reprinted successfully'
+                : 'Failed to reprint receipt',
+          ),
+          backgroundColor: success ? AppColors.success : Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sales = _filtered;
@@ -128,6 +208,15 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+          IconButton(
+            onPressed: _reprintLastReceipt,
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'Reprint Last Receipt',
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.primaryBg,
+              foregroundColor: AppColors.primary,
             ),
           ),
         ],

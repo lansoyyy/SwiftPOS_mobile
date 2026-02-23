@@ -180,8 +180,19 @@ class EscPosService {
         buffer.write(' ' * remaining);
       }
 
-      // Qty and price
-      buffer.writeln('${qty.toString().padLeft(3)}  ${_formatCurrency(price)}');
+      // Discount
+      if (item.discount != null) {
+        final discountAmt = item.discount!.applyTo(price);
+        final discountedPrice = price - discountAmt;
+        buffer.writeln(
+          '${qty.toString().padLeft(3)}  ${_formatCurrency(discountedPrice)} (-${item.discount!.name})',
+        );
+      } else {
+        // Qty and price
+        buffer.writeln(
+          '${qty.toString().padLeft(3)}  ${_formatCurrency(price)}',
+        );
+      }
     }
 
     buffer.writeln('-' * 30);
@@ -189,14 +200,25 @@ class EscPosService {
 
     // Totals
     buffer.write(_alignRight);
+    buffer.writeln('Subtotal: ${_formatCurrency(sale.subtotal)}');
+    if (sale.totalDiscount > 0) {
+      buffer.writeln('Discount:  -${_formatCurrency(sale.totalDiscount)}');
+    }
+    if (sale.taxAmount > 0) {
+      buffer.writeln('Tax:      ${_formatCurrency(sale.taxAmount)}');
+    }
     buffer.write(_boldOn);
-    buffer.writeln('TOTAL: ${_formatCurrency(sale.total)}');
+    buffer.writeln('TOTAL:    ${_formatCurrency(sale.total)}');
     buffer.write(_boldOff);
     buffer.writeln();
 
     // Payment info
     buffer.write(_alignLeft);
-    buffer.writeln('Payment Method: ${sale.paymentMethod}');
+    if (sale.paymentMethods.length > 1) {
+      buffer.writeln('Payment Methods: ${sale.paymentMethods.join(', ')}');
+    } else {
+      buffer.writeln('Payment Method: ${sale.paymentMethod}');
+    }
     if (sale.amountPaid != null) {
       buffer.writeln('Amount Paid: ${_formatCurrency(sale.amountPaid!)}');
     }
