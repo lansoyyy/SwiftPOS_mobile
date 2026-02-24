@@ -80,6 +80,173 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  void _showPriceOverrideDialog(CartItem item) {
+    final controller = TextEditingController(
+      text: item.priceOverride?.toStringAsFixed(2) ?? '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Price Override',
+          style: TextStyle(fontFamily: 'Urbanist', fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.displayName,
+              style: const TextStyle(
+                fontFamily: 'Urbanist',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (item.variant != null) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${item.variant!.size} / ${item.variant!.color}',
+                  style: const TextStyle(
+                    fontFamily: 'Urbanist',
+                    fontSize: 12,
+                    color: AppColors.info,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              'Original Price: \$${item.product.price.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontFamily: 'Urbanist',
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Override Price',
+                prefixText: '\$',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: AppColors.gray100,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              controller.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Urbanist'),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final price = double.tryParse(controller.text);
+              if (price != null && price >= 0) {
+                widget.shell.setPriceOverride(item.product.id, price);
+                controller.dispose();
+                Navigator.pop(context);
+              }
+            },
+            child: const Text(
+              'Apply',
+              style: TextStyle(
+                fontFamily: 'Urbanist',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.shell.setPriceOverride(item.product.id, null);
+              controller.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'Clear',
+              style: TextStyle(
+                fontFamily: 'Urbanist',
+                color: AppColors.warning,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showClearCartDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.delete_outline, color: AppColors.warning, size: 28),
+            const SizedBox(width: 12),
+            const Text(
+              'Clear Cart?',
+              style: TextStyle(
+                fontFamily: 'Urbanist',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to clear all items from the cart? This action cannot be undone.',
+          style: const TextStyle(fontFamily: 'Urbanist'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Urbanist'),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              widget.shell.clearCart();
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.warning,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Clear Cart',
+              style: TextStyle(fontFamily: 'Urbanist'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _handlePayment(String method) async {
     if (method == 'Cash') {
       _showCashDialog();
@@ -213,50 +380,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
         actions: [
           TextButton.icon(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  title: const Text(
-                    'Clear Cart',
-                    style: TextStyle(
-                      fontFamily: 'Urbanist',
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  content: const Text(
-                    'Remove all items from cart?',
-                    style: TextStyle(fontFamily: 'Urbanist'),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        'No',
-                        style: TextStyle(fontFamily: 'Urbanist'),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        widget.shell.clearCart();
-                        Navigator.pop(context);
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        'Yes',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontFamily: 'Urbanist',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+            onPressed: _showClearCartDialog,
             icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
             label: const Text(
               'Clear',
@@ -366,7 +490,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                item.product.name,
+                                                item.displayName,
                                                 style: const TextStyle(
                                                   fontFamily: 'Urbanist',
                                                   fontWeight: FontWeight.w600,
@@ -425,9 +549,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                             _QtyBtn(
                                               icon: Icons.remove,
                                               onTap: () =>
-                                                  widget.shell.updateQty(
+                                                  widget.shell.decrementQty(
                                                     item.product.id,
-                                                    item.quantity - 1,
                                                   ),
                                             ),
                                             SizedBox(
@@ -445,11 +568,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                             _QtyBtn(
                                               icon: Icons.add,
                                               onTap: () =>
-                                                  widget.shell.updateQty(
+                                                  widget.shell.incrementQty(
                                                     item.product.id,
-                                                    item.quantity + 1,
                                                   ),
                                               primary: true,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            GestureDetector(
+                                              onTap: () =>
+                                                  _showPriceOverrideDialog(
+                                                    item,
+                                                  ),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      item.priceOverride != null
+                                                      ? AppColors.primary
+                                                      : AppColors.gray100,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: Icon(
+                                                  Icons.edit,
+                                                  size: 16,
+                                                  color:
+                                                      item.priceOverride != null
+                                                      ? Colors.white
+                                                      : AppColors.textSecondary,
+                                                ),
+                                              ),
                                             ),
                                             const SizedBox(width: 4),
                                             GestureDetector(

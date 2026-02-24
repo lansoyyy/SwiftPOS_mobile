@@ -74,13 +74,18 @@ class MainShellState extends State<MainShell> {
   }
 
   // Cart
-  void addToCart(Product product) {
+  void addToCart(Product product, {ProductVariant? variant}) {
     setState(() {
       final idx = cart.indexWhere((i) => i.product.id == product.id);
       if (idx >= 0) {
-        cart[idx].quantity++;
+        // Check if same variant
+        if (cart[idx].variant?.id == variant?.id) {
+          cart[idx].quantity++;
+        } else {
+          cart.add(CartItem(product: product, variant: variant));
+        }
       } else {
-        cart.add(CartItem(product: product));
+        cart.add(CartItem(product: product, variant: variant));
       }
     });
   }
@@ -96,6 +101,46 @@ class MainShellState extends State<MainShell> {
       } else {
         final idx = cart.indexWhere((i) => i.product.id == productId);
         if (idx >= 0) cart[idx].quantity = qty;
+      }
+    });
+  }
+
+  void incrementQty(String productId) {
+    setState(() {
+      final idx = cart.indexWhere((i) => i.product.id == productId);
+      if (idx >= 0) {
+        cart[idx].quantity++;
+      }
+    });
+  }
+
+  void decrementQty(String productId) {
+    setState(() {
+      final idx = cart.indexWhere((i) => i.product.id == productId);
+      if (idx >= 0) {
+        if (cart[idx].quantity > 1) {
+          cart[idx].quantity--;
+        } else {
+          cart.removeAt(idx);
+        }
+      }
+    });
+  }
+
+  void setPriceOverride(String productId, double? priceOverride) {
+    setState(() {
+      final idx = cart.indexWhere((i) => i.product.id == productId);
+      if (idx >= 0) {
+        cart[idx] = cart[idx].copyWith(priceOverride: priceOverride);
+      }
+    });
+  }
+
+  void setCartItemVariant(String productId, ProductVariant? variant) {
+    setState(() {
+      final idx = cart.indexWhere((i) => i.product.id == productId);
+      if (idx >= 0) {
+        cart[idx] = cart[idx].copyWith(variant: variant);
       }
     });
   }

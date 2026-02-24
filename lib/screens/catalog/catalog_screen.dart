@@ -307,6 +307,106 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
+  void _showVariantDialog(Product product) {
+    if (product.variants.isEmpty) {
+      widget.shell.addToCart(product);
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Select Variant',
+          style: const TextStyle(
+            fontFamily: 'Urbanist',
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              product.name,
+              style: const TextStyle(
+                fontFamily: 'Urbanist',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...product.variants.map((variant) {
+              final price = variant.priceOverride ?? product.price;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: InkWell(
+                  onTap: () {
+                    widget.shell.addToCart(product, variant: variant);
+                    Navigator.pop(context);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.gray100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${variant.size} / ${variant.color}',
+                              style: const TextStyle(
+                                fontFamily: 'Urbanist',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              'Stock: ${variant.stock}',
+                              style: TextStyle(
+                                fontFamily: 'Urbanist',
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '\$${price.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontFamily: 'Urbanist',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Urbanist'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFilterChips() {
     final activeFilters = <String>[];
 
@@ -430,7 +530,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
       itemBuilder: (_, i) => _ProductCard(
         product: _filtered[i],
         qtyInCart: _qtyInCart(_filtered[i].id),
-        onAdd: () => widget.shell.addToCart(_filtered[i]),
+        onAdd: () {
+          if (_filtered[i].variants.isNotEmpty) {
+            _showVariantDialog(_filtered[i]);
+          } else {
+            widget.shell.addToCart(_filtered[i]);
+          }
+        },
         onRemove: () {
           final qty = _qtyInCart(_filtered[i].id);
           widget.shell.updateQty(_filtered[i].id, qty - 1);
@@ -488,6 +594,30 @@ class _ProductCard extends StatelessWidget {
                 Center(
                   child: Icon(product.icon, size: 44, color: product.color),
                 ),
+                if (product.variants.isNotEmpty)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.info,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'Var',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Urbanist',
+                        ),
+                      ),
+                    ),
+                  ),
                 if (inCart)
                   Positioned(
                     top: 8,
