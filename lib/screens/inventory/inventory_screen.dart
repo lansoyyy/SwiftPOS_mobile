@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/validators.dart';
+import '../../core/utils/error_handler.dart';
 import '../main_shell.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -408,6 +410,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final priceCtrl = TextEditingController();
     final stockCtrl = TextEditingController();
     String selectedCategory = 'Food';
+    String? nameError;
+    String? priceError;
+    String? stockError;
 
     showModalBottomSheet(
       context: context,
@@ -441,6 +446,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 style: const TextStyle(fontFamily: 'Urbanist'),
                 decoration: InputDecoration(
                   labelText: 'Product Name',
+                  errorText: nameError,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -452,6 +458,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                   ),
                 ),
+                onChanged: (value) {
+                  final error = Validators.validateProductName(value);
+                  if (error != nameError) {
+                    setModalState(() => nameError = error);
+                  }
+                },
               ),
               const SizedBox(height: 12),
               Row(
@@ -465,6 +477,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       style: const TextStyle(fontFamily: 'Urbanist'),
                       decoration: InputDecoration(
                         labelText: 'Price (P)',
+                        errorText: priceError,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -476,6 +489,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           ),
                         ),
                       ),
+                      onChanged: (value) {
+                        final error = Validators.validatePrice(value);
+                        if (error != priceError) {
+                          setModalState(() => priceError = error);
+                        }
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -486,6 +505,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       style: const TextStyle(fontFamily: 'Urbanist'),
                       decoration: InputDecoration(
                         labelText: 'Stock',
+                        errorText: stockError,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -497,6 +517,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           ),
                         ),
                       ),
+                      onChanged: (value) {
+                        final error = Validators.validateStock(value);
+                        if (error != stockError) {
+                          setModalState(() => stockError = error);
+                        }
+                      },
                     ),
                   ),
                 ],
@@ -540,24 +566,55 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-                    final name = nameCtrl.text.trim();
-                    final price = double.tryParse(priceCtrl.text);
-                    final stock = int.tryParse(stockCtrl.text);
-                    if (name.isEmpty || price == null || stock == null) return;
-                    await widget.shell.addProduct(
-                      Product(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        name: name,
-                        category: selectedCategory,
-                        price: price,
-                        stock: stock,
-                        icon: Icons.inventory_2,
-                        color: const Color(0xFF6366F1),
-                      ),
+                    // Validate all fields
+                    final nameValidation = Validators.validateProductName(
+                      nameCtrl.text.trim(),
                     );
-                    // Reload categories in case new category was added
-                    await _loadCategories();
-                    if (mounted) Navigator.pop(context);
+                    final priceValidation = Validators.validatePrice(
+                      priceCtrl.text,
+                    );
+                    final stockValidation = Validators.validateStock(
+                      stockCtrl.text,
+                    );
+
+                    if (nameValidation != null ||
+                        priceValidation != null ||
+                        stockValidation != null) {
+                      setModalState(() {
+                        nameError = nameValidation;
+                        priceError = priceValidation;
+                        stockError = stockValidation;
+                      });
+                      return;
+                    }
+
+                    final name = nameCtrl.text.trim();
+                    final price = double.parse(priceCtrl.text);
+                    final stock = int.parse(stockCtrl.text);
+
+                    try {
+                      await widget.shell.addProduct(
+                        Product(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          name: name,
+                          category: selectedCategory,
+                          price: price,
+                          stock: stock,
+                          icon: Icons.inventory_2,
+                          color: const Color(0xFF6366F1),
+                        ),
+                      );
+                      // Reload categories in case new category was added
+                      await _loadCategories();
+                      if (mounted) {
+                        Navigator.pop(context);
+                        ErrorHandler.showSuccessToast(
+                          'Product added successfully',
+                        );
+                      }
+                    } catch (e) {
+                      ErrorHandler.handleErrorWithDialog(context, e);
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6366F1),
