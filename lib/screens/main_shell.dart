@@ -6,10 +6,12 @@ import '../models/sale_record.dart';
 import '../models/printer_settings.dart';
 import '../models/tax_settings.dart';
 import '../models/discount.dart';
+import '../models/receipt_settings.dart';
 import '../core/constants/app_colors.dart';
 import '../data/repositories/product_repository.dart';
 import '../data/repositories/sale_record_repository.dart';
 import '../data/repositories/printer_settings_repository.dart';
+import '../data/repositories/receipt_settings_repository.dart';
 import '../data/bluetooth/bluetooth_service.dart';
 import '../data/bluetooth/esc_pos_service.dart';
 import 'catalog/catalog_screen.dart';
@@ -32,6 +34,8 @@ class MainShellState extends State<MainShell> {
   final ProductRepository _productRepo = ProductRepository();
   final SaleRecordRepository _saleRepo = SaleRecordRepository();
   final PrinterSettingsRepository _printerRepo = PrinterSettingsRepository();
+  final ReceiptSettingsRepository _receiptSettingsRepo =
+      ReceiptSettingsRepository();
 
   // Bluetooth Service
   final BluetoothService _bluetoothService = BluetoothService();
@@ -321,13 +325,13 @@ class MainShellState extends State<MainShell> {
   // Print Methods
   Future<bool> printReceipt(
     SaleRecord sale, {
-    String storeName = 'SwiftPOS',
+    ReceiptSettings? receiptSettings,
   }) async {
-    return await _escPosService.printReceipt(sale, storeName: storeName);
+    return await _escPosService.printReceipt(sale, settings: receiptSettings);
   }
 
-  Future<bool> printTestReceipt({String storeName = 'SwiftPOS'}) async {
-    return await _escPosService.printTestReceipt(storeName: storeName);
+  Future<bool> printTestReceipt({ReceiptSettings? receiptSettings}) async {
+    return await _escPosService.printTestReceipt(settings: receiptSettings);
   }
 
   Future<bool> printText(

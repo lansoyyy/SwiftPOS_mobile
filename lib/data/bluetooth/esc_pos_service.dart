@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import '../../models/sale_record.dart';
+import '../../models/receipt_settings.dart';
 import 'bluetooth_service.dart';
 
 /// ESC/POS Print Service - Handles thermal printer commands and receipt formatting
@@ -128,8 +129,9 @@ class EscPosService {
   /// Print a receipt for a sale record
   Future<bool> printReceipt(
     SaleRecord sale, {
-    String storeName = 'SwiftPOS',
+    ReceiptSettings? settings,
   }) async {
+    final receiptSettings = settings ?? ReceiptSettings.defaultSettings;
     if (!_bluetoothService.isConnected) {
       return false;
     }
@@ -144,11 +146,35 @@ class EscPosService {
     buffer.write(_alignCenter);
     buffer.write(_textSizeDoubleWidth);
     buffer.write(_boldOn);
-    buffer.writeln(storeName);
+
+    // Custom header or store name
+    if (receiptSettings.receiptHeader.isNotEmpty) {
+      buffer.writeln(receiptSettings.receiptHeader);
+    } else if (receiptSettings.storeName.isNotEmpty) {
+      buffer.writeln(receiptSettings.storeName);
+    }
+
     buffer.write(_boldOff);
     buffer.write(_textSizeNormal);
     buffer.writeln('=' * 30);
     buffer.writeln();
+
+    // Store info (address, phone, email)
+    if (receiptSettings.storeAddress.isNotEmpty ||
+        receiptSettings.storePhone.isNotEmpty ||
+        receiptSettings.storeEmail.isNotEmpty) {
+      buffer.write(_alignLeft);
+      if (receiptSettings.storeAddress.isNotEmpty) {
+        buffer.writeln(receiptSettings.storeAddress);
+      }
+      if (receiptSettings.storePhone.isNotEmpty) {
+        buffer.writeln('Tel: ${receiptSettings.storePhone}');
+      }
+      if (receiptSettings.storeEmail.isNotEmpty) {
+        buffer.writeln('Email: ${receiptSettings.storeEmail}');
+      }
+      buffer.writeln();
+    }
 
     // Date and time
     buffer.write(_alignLeft);
@@ -231,10 +257,34 @@ class EscPosService {
     buffer.write(_alignCenter);
     buffer.write(_textSizeDoubleHeight);
     buffer.write(_boldOn);
-    buffer.writeln('THANK YOU!');
+
+    // Custom footer or default
+    if (receiptSettings.receiptFooter.isNotEmpty) {
+      buffer.writeln(receiptSettings.receiptFooter);
+    } else {
+      buffer.writeln('THANK YOU!');
+    }
+
     buffer.write(_boldOff);
     buffer.write(_textSizeNormal);
     buffer.writeln();
+
+    // Custom message
+    if (receiptSettings.receiptMessage.isNotEmpty) {
+      buffer.write(_alignCenter);
+      buffer.writeln(receiptSettings.receiptMessage);
+      buffer.writeln();
+    }
+
+    // Barcode
+    if (receiptSettings.showBarcode) {
+      buffer.write(_alignCenter);
+      buffer.write(_barcodeHRI);
+      buffer.write(_barcodeWidth);
+      buffer.write(_barcodeHeight);
+      buffer.writeln(sale.id.substring(sale.id.length - 8));
+      buffer.writeln();
+    }
 
     // Feed and cut
     buffer.write(_feed5Lines);
@@ -245,7 +295,9 @@ class EscPosService {
   }
 
   /// Print a test receipt
-  Future<bool> printTestReceipt({String storeName = 'SwiftPOS'}) async {
+  Future<bool> printTestReceipt({ReceiptSettings? settings}) async {
+    final receiptSettings = settings ?? ReceiptSettings.defaultSettings;
+
     if (!_bluetoothService.isConnected) {
       return false;
     }
@@ -260,11 +312,35 @@ class EscPosService {
     buffer.write(_alignCenter);
     buffer.write(_textSizeDoubleWidth);
     buffer.write(_boldOn);
-    buffer.writeln(storeName);
+
+    // Custom header or store name
+    if (receiptSettings.receiptHeader.isNotEmpty) {
+      buffer.writeln(receiptSettings.receiptHeader);
+    } else if (receiptSettings.storeName.isNotEmpty) {
+      buffer.writeln(receiptSettings.storeName);
+    }
+
     buffer.write(_boldOff);
     buffer.write(_textSizeNormal);
     buffer.writeln('=' * 30);
     buffer.writeln();
+
+    // Store info (address, phone, email)
+    if (receiptSettings.storeAddress.isNotEmpty ||
+        receiptSettings.storePhone.isNotEmpty ||
+        receiptSettings.storeEmail.isNotEmpty) {
+      buffer.write(_alignLeft);
+      if (receiptSettings.storeAddress.isNotEmpty) {
+        buffer.writeln(receiptSettings.storeAddress);
+      }
+      if (receiptSettings.storePhone.isNotEmpty) {
+        buffer.writeln('Tel: ${receiptSettings.storePhone}');
+      }
+      if (receiptSettings.storeEmail.isNotEmpty) {
+        buffer.writeln('Email: ${receiptSettings.storeEmail}');
+      }
+      buffer.writeln();
+    }
 
     // Test message
     buffer.write(_alignCenter);
@@ -288,10 +364,24 @@ class EscPosService {
     buffer.write(_alignCenter);
     buffer.write(_textSizeDoubleHeight);
     buffer.write(_boldOn);
-    buffer.writeln('SUCCESS!');
+
+    // Custom footer or default
+    if (receiptSettings.receiptFooter.isNotEmpty) {
+      buffer.writeln(receiptSettings.receiptFooter);
+    } else {
+      buffer.writeln('SUCCESS!');
+    }
+
     buffer.write(_boldOff);
     buffer.write(_textSizeNormal);
     buffer.writeln();
+
+    // Custom message
+    if (receiptSettings.receiptMessage.isNotEmpty) {
+      buffer.write(_alignCenter);
+      buffer.writeln(receiptSettings.receiptMessage);
+      buffer.writeln();
+    }
 
     // Feed and cut
     buffer.write(_feed5Lines);
